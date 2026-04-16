@@ -1,50 +1,725 @@
 <!DOCTYPE html>
-<html>
+<html lang="pl">
 <head>
-    <title>VBT Coach</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: sans-serif; text-align: center; background: #121212; color: white; padding-top: 50px; }
-        #speed { font-size: 120px; font-weight: bold; color: #00ff00; margin: 20px 0; }
-        button { padding: 20px 40px; font-size: 20px; border-radius: 50px; border: none; background: #007bff; color: white; cursor: pointer; }
-        .label { font-size: 24px; color: #888; }
-    </style>
+  <meta charset="UTF-8">
+  <title>VBT Coach</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:       #06060f;
+      --s1:       #0d0d1c;
+      --s2:       #121226;
+      --border:   #1a1a30;
+      --text:     #dde2f0;
+      --muted:    #454568;
+      --accent:   #00e5a0;
+      --danger:   #ef4444;
+      --warn:     #f59e0b;
+
+      /* strefy */
+      --z-speed:  #60a5fa;
+      --z-power:  #00e5a0;
+      --z-ss:     #f59e0b;
+      --z-str:    #f97316;
+      --z-max:    #ef4444;
+
+      --zone-color: var(--muted);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Barlow Condensed', sans-serif;
+      min-height: 100vh;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 12px 14px 28px;
+    }
+
+    /* ── HEADER ─────────────────────────── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0 14px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 14px;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .header-logo h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      color: var(--accent);
+    }
+
+    .header-logo span {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--muted);
+    }
+
+    .conn-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      transition: color 0.3s;
+    }
+
+    .conn-status.on { color: var(--accent); }
+
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .dot.on {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: blink 2.4s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.45; }
+    }
+
+    /* ── GŁÓWNY WYŚWIETLACZ ──────────────── */
+    .vel-card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 28px 20px 22px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .vel-card::before {           /* górna kreska strefy */
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 3px;
+      background: var(--zone-color);
+      transition: background 0.5s;
+    }
+
+    .vel-card::after {            /* subtelna poświata */
+      content: '';
+      position: absolute;
+      top: 3px; left: 0; right: 0;
+      height: 80px;
+      background: linear-gradient(to bottom, color-mix(in srgb, var(--zone-color) 6%, transparent), transparent);
+      pointer-events: none;
+      transition: background 0.5s;
+    }
+
+    .zone-label {
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--zone-color);
+      padding: 3px 14px;
+      background: color-mix(in srgb, var(--zone-color) 10%, transparent);
+      border-radius: 2px;
+      display: inline-block;
+      margin-bottom: 14px;
+      transition: all 0.4s;
+      min-width: 180px;
+    }
+
+    .vel-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(72px, 22vw, 104px);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -3px;
+      color: var(--zone-color);
+      transition: color 0.4s;
+    }
+
+    .vel-unit {
+      font-size: 18px;
+      letter-spacing: 6px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    @keyframes pop {
+      0%   { transform: scale(1.04); opacity: 0.5; }
+      100% { transform: scale(1);    opacity: 1;   }
+    }
+    .pop { animation: pop 0.35s ease; }
+
+    /* ── SIATKA STATYSTYK ────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .stat {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 11px 6px;
+      text-align: center;
+    }
+
+    .stat-lbl {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .stat-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-val.hi { color: var(--accent); }
+
+    /* ── UTRATA PRĘDKOŚCI ────────────────── */
+    .vl-card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+
+    .vl-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+
+    .section-title {
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--muted);
+    }
+
+    .vl-pct {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      transition: color 0.3s;
+    }
+
+    .vl-track {
+      height: 5px;
+      background: var(--s2);
+      border-radius: 3px;
+      position: relative;
+      overflow: visible;
+      margin-bottom: 7px;
+    }
+
+    .vl-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease, background 0.3s;
+      width: 0%;
+      background: var(--accent);
+    }
+
+    /* Pionowe markery */
+    .vl-mark {
+      position: absolute;
+      top: -3px; bottom: -3px;
+      width: 2px;
+      border-radius: 1px;
+    }
+    .vl-mark.str  { left: 10%; background: var(--danger); }
+    .vl-mark.hype { left: 20%; background: var(--warn); }
+
+    .vl-ticks {
+      display: flex;
+      position: relative;
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+
+    .vl-ticks span { position: absolute; transform: translateX(-50%); }
+
+    /* ── WYKRES ──────────────────────────── */
+    .chart-card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 14px 14px 10px;
+      margin-bottom: 10px;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 150px;
+    }
+
+    /* ── STREFY LEGENDA ──────────────────── */
+    .zones-card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+
+    .zones-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 16px;
+      margin-top: 10px;
+    }
+
+    .z-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .z-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .z-name {
+      font-size: 11px;
+      letter-spacing: 1px;
+      flex: 1;
+    }
+
+    .z-range {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    /* ── PRZYCISKI ───────────────────────── */
+    .btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 14px 10px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 15px;
+      letter-spacing: 3px;
+      font-weight: 600;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #06060f;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover { filter: brightness(1.12); }
+    .btn-primary:disabled {
+      background: var(--muted);
+      border-color: var(--muted);
+      cursor: default;
+      filter: none;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+    }
+    .btn-ghost:hover { border-color: var(--text); color: var(--text); }
+
+    /* ── ALERT UTRATY PRĘDKOŚCI ──────────── */
+    .vl-alert {
+      display: none;
+      text-align: center;
+      padding: 8px 12px;
+      border-radius: 3px;
+      font-size: 12px;
+      letter-spacing: 2px;
+      margin-bottom: 10px;
+    }
+    .vl-alert.warn  { background: color-mix(in srgb, var(--warn) 15%, transparent);   border: 1px solid var(--warn);   color: var(--warn); }
+    .vl-alert.crit  { background: color-mix(in srgb, var(--danger) 15%, transparent); border: 1px solid var(--danger); color: var(--danger); }
+    .vl-alert.show  { display: block; }
+  </style>
 </head>
 <body>
-    <div class="label">Ostatnie powtórzenie:</div>
-    <div id="speed">0.00</div>
-    <div class="label">m/s</div>
-    <br><br>
-    <button onclick="connectBLE()">POŁĄCZ Z XIAO</button>
 
-    <script>
-    async function connectBLE() {
-        try {
-            // Wersja maksymalnie uproszczona, żeby wymusić listę
-            const device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'] // Pełny identyfikator usługi
-            });
+<!-- HEADER -->
+<header class="header">
+  <div class="header-logo">
+    <h1>VBT</h1>
+    <span>COACH</span>
+  </div>
+  <div class="conn-status" id="connStatus">
+    <div class="dot" id="dot"></div>
+    <span id="connLabel">OFFLINE</span>
+  </div>
+</header>
 
-            const server = await device.gatt.connect();
-            const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
-            const characteristic = await service.getCharacteristic('00001102-0000-1000-8000-00805f9b34fb');
-            
-            await characteristic.startNotifications();
-            
-            const decoder = new TextDecoder('utf-8');
-            characteristic.addEventListener('characteristicvaluechanged', (event) => {
-                const text = decoder.decode(event.target.value);
-                document.getElementById('speed').innerText = text;
-            });
+<!-- ALERT UTRATY PRĘDKOŚCI -->
+<div class="vl-alert" id="vlAlert"></div>
 
-            alert("Połączono!");
-        } catch (error) {
-            // Wyświetli dokładną nazwę błędu, co ułatwi nam naprawę
-            console.log(error);
-            alert("Błądddd: " + error.name + " - " + error.message);
-        }
+<!-- GŁÓWNY WYŚWIETLACZ -->
+<div class="vel-card" id="velCard">
+  <div class="zone-label" id="zoneLabel">— BRAK DANYCH —</div>
+  <div class="vel-num" id="velNum">0.00</div>
+  <div class="vel-unit">m / s</div>
+</div>
+
+<!-- STATYSTYKI -->
+<div class="stats-grid">
+  <div class="stat">
+    <div class="stat-lbl">POWT.</div>
+    <div class="stat-val hi" id="sRep">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-lbl">CZAS</div>
+    <div class="stat-val" id="sDur">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-lbl">MAKS.</div>
+    <div class="stat-val" id="sMax">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-lbl">ŚREDNIA</div>
+    <div class="stat-val" id="sAvg">—</div>
+  </div>
+</div>
+
+<!-- UTRATA PRĘDKOŚCI -->
+<div class="vl-card">
+  <div class="vl-row">
+    <span class="section-title">UTRATA PRĘDKOŚCI</span>
+    <span class="vl-pct" id="vlPct">—</span>
+  </div>
+  <div class="vl-track">
+    <div class="vl-fill" id="vlFill"></div>
+    <div class="vl-mark str"></div>
+    <div class="vl-mark hype"></div>
+  </div>
+  <div class="vl-ticks" style="height:14px">
+    <span style="left:0%">0%</span>
+    <span style="left:10%; color: var(--danger)">10%</span>
+    <span style="left:20%; color: var(--warn)">20%</span>
+    <span style="left:100%">100%</span>
+  </div>
+</div>
+
+<!-- WYKRES HISTORII -->
+<div class="chart-card">
+  <div class="section-title" style="margin-bottom:12px">HISTORIA SERII</div>
+  <div class="chart-wrap">
+    <canvas id="repChart"></canvas>
+  </div>
+</div>
+
+<!-- LEGENDA STREF -->
+<div class="zones-card">
+  <div class="section-title">STREFY PRĘDKOŚCI</div>
+  <div class="zones-grid">
+    <div class="z-item">
+      <div class="z-dot" style="background:var(--z-speed)"></div>
+      <span class="z-name">SZYBKOŚĆ</span>
+      <span class="z-range">&gt;1.0</span>
+    </div>
+    <div class="z-item">
+      <div class="z-dot" style="background:var(--z-power)"></div>
+      <span class="z-name">MOC</span>
+      <span class="z-range">0.75–1.0</span>
+    </div>
+    <div class="z-item">
+      <div class="z-dot" style="background:var(--z-ss)"></div>
+      <span class="z-name">SIŁA–SZYBKOŚĆ</span>
+      <span class="z-range">0.5–0.75</span>
+    </div>
+    <div class="z-item">
+      <div class="z-dot" style="background:var(--z-str)"></div>
+      <span class="z-name">SIŁA</span>
+      <span class="z-range">0.35–0.5</span>
+    </div>
+    <div class="z-item">
+      <div class="z-dot" style="background:var(--z-max)"></div>
+      <span class="z-name">SIŁA MAKS.</span>
+      <span class="z-range">&lt;0.35</span>
+    </div>
+  </div>
+</div>
+
+<!-- PRZYCISKI -->
+<div class="btns">
+  <button class="btn btn-primary" id="connectBtn" onclick="connectBLE()">POŁĄCZ</button>
+  <button class="btn btn-ghost" onclick="resetSession()">RESET SERII</button>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  STREFY
+// ─────────────────────────────────────────────
+const ZONES = [
+  { min: 1.00, name: 'SZYBKOŚĆ',      color: '#60a5fa' },
+  { min: 0.75, name: 'MOC',           color: '#00e5a0' },
+  { min: 0.50, name: 'SIŁA–SZYBKOŚĆ', color: '#f59e0b' },
+  { min: 0.35, name: 'SIŁA',          color: '#f97316' },
+  { min: 0.00, name: 'SIŁA MAKS.',    color: '#ef4444' },
+];
+
+function getZone(v) {
+  return ZONES.find(z => v >= z.min) || ZONES[ZONES.length - 1];
+}
+
+// ─────────────────────────────────────────────
+//  STAN SESJI
+// ─────────────────────────────────────────────
+let reps = [];           // lista prędkości powtórzeń
+let firstRepVel = null;  // prędkość pierwszego powtórzenia (do VL%)
+let chart;
+
+// ─────────────────────────────────────────────
+//  AKTUALIZACJA UI
+// ─────────────────────────────────────────────
+function onNewRep(velocity, repNum, durationMs) {
+  const zone = getZone(velocity);
+
+  // ─ Główny wyświetlacz ─
+  document.getElementById('velCard').style.setProperty('--zone-color', zone.color);
+  const velEl = document.getElementById('velNum');
+  velEl.textContent = velocity.toFixed(2);
+  velEl.className = 'vel-num pop';
+  setTimeout(() => { velEl.className = 'vel-num'; }, 400);
+
+  document.getElementById('zoneLabel').textContent = zone.name;
+  document.getElementById('zoneLabel').style.color = zone.color;
+
+  // ─ Dodaj do historii ─
+  reps.push(velocity);
+  if (!firstRepVel) firstRepVel = velocity;
+
+  const repIdx = reps.length;
+
+  // ─ Statystyki ─
+  document.getElementById('sRep').textContent = repIdx;
+  if (durationMs) document.getElementById('sDur').textContent = durationMs + 'ms';
+  const maxV = Math.max(...reps);
+  const avgV = reps.reduce((a, b) => a + b, 0) / reps.length;
+  document.getElementById('sMax').textContent = maxV.toFixed(2);
+  document.getElementById('sAvg').textContent = avgV.toFixed(2);
+
+  // ─ Utrata prędkości ─
+  const vlEl    = document.getElementById('vlPct');
+  const fillEl  = document.getElementById('vlFill');
+  const alertEl = document.getElementById('vlAlert');
+
+  if (reps.length > 1) {
+    const vl = (firstRepVel - velocity) / firstRepVel * 100;
+    vlEl.textContent = (vl > 0 ? '+' : '') + vl.toFixed(1) + '%';
+    vlEl.style.color = vl > 20 ? 'var(--danger)' : vl > 10 ? 'var(--warn)' : 'var(--accent)';
+
+    const filled = Math.min(100, Math.max(0, vl));
+    fillEl.style.width    = filled + '%';
+    fillEl.style.background = vl > 20 ? 'var(--danger)' : vl > 10 ? 'var(--warn)' : 'var(--accent)';
+
+    if (vl > 20) {
+      alertEl.textContent = '⚠ UTRATA >20% — ZATRZYMAJ SERIĘ (strefa hipertrofii wyczerpana)';
+      alertEl.className = 'vl-alert crit show';
+    } else if (vl > 10) {
+      alertEl.textContent = '⚠ UTRATA >10% — ROZWAŻ ZAKOŃCZENIE (cel siłowy)';
+      alertEl.className = 'vl-alert warn show';
+    } else {
+      alertEl.className = 'vl-alert';
     }
+  }
+
+  // ─ Wykres ─
+  chart.data.labels.push('P' + repIdx);
+  chart.data.datasets[0].data.push(velocity);
+  chart.data.datasets[0].backgroundColor.push(zone.color + 'bb');
+  chart.data.datasets[0].borderColor.push(zone.color);
+
+  const maxY = Math.max(1.5, maxV * 1.25);
+  chart.options.scales.y.max = parseFloat(maxY.toFixed(1));
+  chart.update('active');
+}
+
+// ─────────────────────────────────────────────
+//  RESET
+// ─────────────────────────────────────────────
+function resetSession() {
+  reps = [];
+  firstRepVel = null;
+
+  document.getElementById('velNum').textContent = '0.00';
+  document.getElementById('velCard').style.removeProperty('--zone-color');
+  document.getElementById('zoneLabel').textContent = '— BRAK DANYCH —';
+  document.getElementById('zoneLabel').style.color = '';
+  ['sRep','sMax','sAvg'].forEach(id => document.getElementById(id).textContent = id === 'sRep' ? '0' : '—');
+  document.getElementById('sDur').textContent = '—';
+  document.getElementById('vlPct').textContent = '—';
+  document.getElementById('vlPct').style.color = '';
+  document.getElementById('vlFill').style.width = '0%';
+  document.getElementById('vlAlert').className = 'vl-alert';
+
+  chart.data.labels = [];
+  chart.data.datasets[0].data = [];
+  chart.data.datasets[0].backgroundColor = [];
+  chart.data.datasets[0].borderColor = [];
+  chart.options.scales.y.max = 1.5;
+  chart.update();
+}
+
+// ─────────────────────────────────────────────
+//  WYKRES
+// ─────────────────────────────────────────────
+function initChart() {
+  const ctx = document.getElementById('repChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        backgroundColor: [],
+        borderColor: [],
+        borderWidth: 1,
+        borderRadius: 3,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0d0d1c',
+          borderColor: '#1a1a30',
+          borderWidth: 1,
+          titleColor: '#454568',
+          bodyColor: '#dde2f0',
+          titleFont: { family: "'Barlow Condensed', sans-serif", size: 11, weight: 400 },
+          bodyFont:  { family: "'JetBrains Mono', monospace", size: 16, weight: 700 },
+          callbacks: {
+            title: items => 'POWTÓRZENIE ' + items[0].label.replace('P',''),
+            label: ctx  => '  ' + ctx.parsed.y.toFixed(2) + ' m/s',
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#1a1a30' },
+          ticks: {
+            color: '#454568',
+            font: { family: "'Barlow Condensed', sans-serif", size: 12 }
+          }
+        },
+        y: {
+          min: 0,
+          max: 1.5,
+          grid: { color: '#1a1a30' },
+          ticks: {
+            color: '#454568',
+            font: { family: "'JetBrains Mono', monospace", size: 10 },
+            callback: v => v.toFixed(1)
+          }
+        }
+      }
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+//  BLE
+// ─────────────────────────────────────────────
+async function connectBLE() {
+  const btn    = document.getElementById('connectBtn');
+  const dot    = document.getElementById('dot');
+  const status = document.getElementById('connStatus');
+  const label  = document.getElementById('connLabel');
+
+  try {
+    btn.disabled = true;
+    btn.textContent = 'ŁĄCZENIE...';
+
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [0x1101]
+    });
+
+    device.addEventListener('gattserverdisconnected', () => {
+      dot.className = 'dot';
+      status.className = 'conn-status';
+      label.textContent = 'OFFLINE';
+      btn.disabled = false;
+      btn.textContent = 'POŁĄCZ';
+    });
+
+    const server  = await device.gatt.connect();
+    const service = await server.getPrimaryService(0x1101);
+    const char    = await service.getCharacteristic(0x1102);
+
+    await char.startNotifications();
+    char.addEventListener('characteristicvaluechanged', e => {
+      const raw   = new TextDecoder().decode(e.target.value).trim();
+      // Format danych z kontrolera: "prędkość,powtórzenie,czas_ms"
+      const parts = raw.split(',');
+      const vel   = parseFloat(parts[0]);
+      const rep   = parts[1] ? parseInt(parts[1]) : null;
+      const dur   = parts[2] ? parseInt(parts[2]) : null;
+
+      if (!isNaN(vel) && vel > 0) {
+        onNewRep(vel, rep, dur);
+      }
+    });
+
+    dot.className = 'dot on';
+    status.className = 'conn-status on';
+    label.textContent = (device.name || 'POŁĄCZONO').toUpperCase();
+    btn.textContent = 'POŁĄCZONO';
+    // Przycisk pozostaje disabled – jest już połączony
+
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'POŁĄCZ';
+    if (err.name !== 'NotFoundError') {
+      alert('Błąd BLE: ' + err.message);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+initChart();
 </script>
 </body>
 </html>
