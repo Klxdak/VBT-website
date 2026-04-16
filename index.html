@@ -20,9 +20,9 @@
     <script>
     async function connectBLE() {
         try {
-            // Używamy filtrów, żeby uniknąć błędu "2"
+            // "acceptAllDevices" naprawia Błąd: 2 (NotFoundError)
             const device = await navigator.bluetooth.requestDevice({
-                filters: [{ name: 'VBT_XIAO' }],
+                acceptAllDevices: true,
                 optionalServices: [0x1101]
             });
 
@@ -35,20 +35,15 @@
             const decoder = new TextDecoder('utf-8');
 
             characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                // To odczyta cały tekst (np. "0.85") zamiast pojedynczych znaków
                 const value = event.target.value;
-                const decoded = decoder.decode(value);
-                
-                // Wyświetlamy to, co przyszło (tekst lub liczba)
-                if (decoded.trim() !== "") {
-                    document.getElementById('speed').innerText = decoded;
-                }
+                const text = decoder.decode(value);
+                document.getElementById('speed').innerText = text;
             });
 
-            alert("Połączono pomyślnie!");
-        } catch (error) {
-            alert("Błąd połączenia: " + error);
-        }
-        }
-    </script>
+            alert("Połączono!");
+        } catch (v) { alert("Błąd: " + v); }
+    }
+</script>
 </body>
 </html>
