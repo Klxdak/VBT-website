@@ -21,7 +21,7 @@
         async function connectBLE() {
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'VBT_Coach' }],
+                    acceptAllDevices: true,
                     optionalServices: [0x1101]
                 });
                 const server = await device.gatt.connect();
