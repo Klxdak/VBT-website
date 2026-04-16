@@ -18,33 +18,27 @@
     <button onclick="connectBLE()">POŁĄCZ Z XIAO</button>
 
     <script>
-        async function connectBLE() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'VBT_XIAO' }], // Szuka konkretnie Twojej nazwy
-                    optionalServices: [0x1101]
-                });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(0x1101);
-                const char = await service.getCharacteristic(0x1102);
-                
-                await char.startNotifications();
-                
-                const decoder = new TextDecoder('utf-8'); // Jeden dekoder poza pętlą
-                
-                char.addEventListener('characteristicvaluechanged', (e) => {
-                    const value = e.target.value;
-                    const decodedString = decoder.decode(value);
-                    
-                    // Jeśli wartość nie jest pusta, wyświetl ją
-                    if (decodedString.trim().length > 0) {
-                        document.getElementById('speed').innerText = decodedString;
-                    }
-                });
-                
-                alert("Połączono z VBT!");
-            } catch (v) { alert("Błąd: " + v); }
-        }
+    async function connectBLE() {
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: [0x1101]
+            });
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService(0x1101);
+            const char = await service.getCharacteristic(0x1102);
+            
+            await char.startNotifications();
+            char.addEventListener('characteristicvaluechanged', (e) => {
+                // ODBIERAMY SUROWY BAJT (np. 85)
+                const rawVal = e.target.value.getUint8(0);
+                // ZAMIENIAMY NA FORMAT 0.85
+                const finalV = (rawVal / 100).toFixed(2);
+                document.getElementById('speed').innerText = finalV;
+            });
+            alert("Połączono!");
+        } catch (v) { alert("Błąd: " + v); }
+    }
     </script>
 </body>
 </html>
