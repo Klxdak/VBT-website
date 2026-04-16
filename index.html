@@ -661,58 +661,33 @@ function initChart() {
 //  BLE
 // ─────────────────────────────────────────────
 async function connectBLE() {
-  const btn    = document.getElementById('connectBtn');
-  const dot    = document.getElementById('dot');
-  const status = document.getElementById('connStatus');
-  const label  = document.getElementById('connLabel');
+  if (!navigator.bluetooth) {
+    alert('Brak Web Bluetooth (Bluefy/iOS problem)');
+    return;
+  }
 
   try {
-    btn.disabled = true;
-    btn.textContent = 'ŁĄCZENIE...';
-
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
-      optionalServices: [0x1101]
+      optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
     });
 
-    device.addEventListener('gattserverdisconnected', () => {
-      dot.className = 'dot';
-      status.className = 'conn-status';
-      label.textContent = 'OFFLINE';
-      btn.disabled = false;
-      btn.textContent = 'POŁĄCZ';
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
+    const characteristic = await service.getCharacteristic('00001102-0000-1000-8000-00805f9b34fb');
+
+    await characteristic.startNotifications();
+
+    const decoder = new TextDecoder();
+
+    characteristic.addEventListener('characteristicvaluechanged', (event) => {
+      const text = decoder.decode(event.target.value);
+      document.getElementById('speed').innerText = text;
     });
 
-    const server  = await device.gatt.connect();
-    const service = await server.getPrimaryService(0x1101);
-    const char    = await service.getCharacteristic(0x1102);
-
-    await char.startNotifications();
-    char.addEventListener('characteristicvaluechanged', e => {
-      const raw   = new TextDecoder().decode(e.target.value).trim();
-      // Format danych z kontrolera: "prędkość,powtórzenie,czas_ms"
-      const parts = raw.split(',');
-      const vel   = parseFloat(parts[0]);
-      const rep   = parts[1] ? parseInt(parts[1]) : null;
-      const dur   = parts[2] ? parseInt(parts[2]) : null;
-
-      if (!isNaN(vel) && vel > 0) {
-        onNewRep(vel, rep, dur);
-      }
-    });
-
-    dot.className = 'dot on';
-    status.className = 'conn-status on';
-    label.textContent = (device.name || 'POŁĄCZONO').toUpperCase();
-    btn.textContent = 'POŁĄCZONO';
-    // Przycisk pozostaje disabled – jest już połączony
-
-  } catch (err) {
-    btn.disabled = false;
-    btn.textContent = 'POŁĄCZ';
-    if (err.name !== 'NotFoundError') {
-      alert('Błąd BLE: ' + err.message);
-    }
+    alert("Połączono!");
+  } catch (error) {
+    alert("Błąd: " + error.message);
   }
 }
 
