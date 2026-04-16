@@ -18,24 +18,34 @@
     <button onclick="connectBLE()">POŁĄCZ Z XIAO</button>
 
     <script>
-        async function connectBLE() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [0x1101]
-                });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(0x1101);
-                const char = await service.getCharacteristic(0x1102);
-                
-                await char.startNotifications();
-                char.addEventListener('characteristicvaluechanged', (e) => {
-                    const val = new TextDecoder().decode(e.target.value);
-                    document.getElementById('speed').innerText = val;
-                });
-                alert("Połączono!");
-            } catch (v) { alert("Błąd: " + v); }
+    // Używamy pełnych adresów UUID - to eliminuje 90% błędów na iOS
+    const SERVICE_UUID = "00001101-0000-1000-8000-00805f9b34fb";
+    const CHAR_UUID    = "00001102-0000-1000-8000-00805f9b34fb";
+
+    async function connectBLE() {
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: [SERVICE_UUID]
+            });
+            
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService(SERVICE_UUID);
+            const characteristic = await service.getCharacteristic(CHAR_UUID);
+            
+            await characteristic.startNotifications();
+            characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                const value = new TextDecoder().decode(event.target.value);
+                document.getElementById('speed').innerText = value;
+            });
+            
+            document.querySelector('button').innerText = "POŁĄCZONO";
+            document.querySelector('button').style.background = "#28a745";
+        } catch (error) {
+            alert("Błąd: " + error);
+            console.log(error);
         }
+    }
     </script>
 </body>
 </html>
