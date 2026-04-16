@@ -20,25 +20,35 @@
     <script>
     async function connectBLE() {
         try {
+            // Używamy filtrów, żeby uniknąć błędu "2"
             const device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
+                filters: [{ name: 'VBT_XIAO' }],
                 optionalServices: [0x1101]
             });
+
             const server = await device.gatt.connect();
             const service = await server.getPrimaryService(0x1101);
-            const char = await service.getCharacteristic(0x1102);
+            const characteristic = await service.getCharacteristic(0x1102);
             
-            await char.startNotifications();
-            char.addEventListener('characteristicvaluechanged', (e) => {
-                // ODBIERAMY SUROWY BAJT (np. 85)
-                const rawVal = e.target.value.getUint8(0);
-                // ZAMIENIAMY NA FORMAT 0.85
-                const finalV = (rawVal / 100).toFixed(2);
-                document.getElementById('speed').innerText = finalV;
+            await characteristic.startNotifications();
+            
+            const decoder = new TextDecoder('utf-8');
+
+            characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                const value = event.target.value;
+                const decoded = decoder.decode(value);
+                
+                // Wyświetlamy to, co przyszło (tekst lub liczba)
+                if (decoded.trim() !== "") {
+                    document.getElementById('speed').innerText = decoded;
+                }
             });
-            alert("Połączono!");
-        } catch (v) { alert("Błąd: " + v); }
-    }
+
+            alert("Połączono pomyślnie!");
+        } catch (error) {
+            alert("Błąd połączenia: " + error);
+        }
+        }
     </script>
 </body>
 </html>
