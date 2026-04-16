@@ -20,29 +20,30 @@
     <script>
     async function connectBLE() {
         try {
-            // "acceptAllDevices" naprawia Błąd: 2 (NotFoundError)
+            // Wersja maksymalnie uproszczona, żeby wymusić listę
             const device = await navigator.bluetooth.requestDevice({
                 acceptAllDevices: true,
-                optionalServices: [0x1101]
+                optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'] // Pełny identyfikator usługi
             });
 
             const server = await device.gatt.connect();
-            const service = await server.getPrimaryService(0x1101);
-            const characteristic = await service.getCharacteristic(0x1102);
+            const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
+            const characteristic = await service.getCharacteristic('00001102-0000-1000-8000-00805f9b34fb');
             
             await characteristic.startNotifications();
             
             const decoder = new TextDecoder('utf-8');
-
             characteristic.addEventListener('characteristicvaluechanged', (event) => {
-                // To odczyta cały tekst (np. "0.85") zamiast pojedynczych znaków
-                const value = event.target.value;
-                const text = decoder.decode(value);
+                const text = decoder.decode(event.target.value);
                 document.getElementById('speed').innerText = text;
             });
 
             alert("Połączono!");
-        } catch (v) { alert("Błąd: " + v); }
+        } catch (error) {
+            // Wyświetli dokładną nazwę błędu, co ułatwi nam naprawę
+            console.log(error);
+            alert("Błąd: " + error.name + " - " + error.message);
+        }
     }
 </script>
 </body>
