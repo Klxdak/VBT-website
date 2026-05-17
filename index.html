@@ -660,34 +660,105 @@ function initChart() {
 // ─────────────────────────────────────────────
 //  BLE
 // ─────────────────────────────────────────────
+function setStatus(text) {
+  document.getElementById('connLabel').textContent = text;
+}
+
 async function connectBLE() {
-  if (!navigator.bluetooth) {
-    alert('Brak Web Bluetooth (Bluefy/iOS problem)');
-    return;
-  }
+  const btn    = document.getElementById('connectBtn');
+  const dot    = document.getElementById('dot');
+  const status = document.getElementById('connStatus');
 
   try {
+    btn.disabled = true;
+    btn.textContent = 'SZUKAM...';
+    setStatus('SZUKAM...');
+
+    // ── 1. Wybór urządzenia ──────────────────
+    // WAŻNE: optionalServices musi zawierać UUID serwisu,
+    // inaczej Chrome zablokuje dostęp do charakterystyki.
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
-      optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
+      optionalServices: [0x1101]
     });
 
+    btn.textContent = 'ŁĄCZENIE...';
+    setStatus('ŁĄCZENIE...');
+    console.log('[BLE] Wybrano urządzenie:', device.name, device.id);
+
+    device.addEventListener('gattserverdisconnected', () => {
+      dot.className = 'dot';
+      status.className = 'conn-status';
+      setStatus('OFFLINE');
+      btn.disabled = false;
+      btn.textContent = 'POŁĄCZ';
+      console.log('[BLE] Rozłączono.');
+    });
+
+    // ── 2. Połączenie GATT ───────────────────
     const server = await device.gatt.connect();
-    const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb');
-    const characteristic = await service.getCharacteristic('00001102-0000-1000-8000-00805f9b34fb');
+    console.log('[BLE] GATT połączony.');
 
-    await characteristic.startNotifications();
+    // ── 3. Serwis ────────────────────────────
+    let service;
+    try {
+      service = await server.getPrimaryService(0x1101);
+      console.log('[BLE] Serwis 0x1101 znaleziony.');
+    } catch (e) {
+      throw new Error('Serwis 0x1101 niedostępny. Sprawdź firmware XIAO.\nSzczegóły: ' + e.message);
+    }
 
-    const decoder = new TextDecoder();
+    // ── 4. Charakterystyka ───────────────────
+    let char;
+    try {
+      char = await service.getCharacteristic(0x1102);
+      console.log('[BLE] Charakterystyka 0x1102 znaleziona.');
+    } catch (e) {
+      throw new Error('Charakterystyka 0x1102 niedostępna.\nSzczegóły: ' + e.message);
+    }
 
-    characteristic.addEventListener('characteristicvaluechanged', (event) => {
-      const text = decoder.decode(event.target.value);
-      document.getElementById('speed').innerText = text;
+    // ── 5. Subskrypcja powiadomień ───────────
+    try {
+      await char.startNotifications();
+      console.log('[BLE] startNotifications() OK – oczekuję danych...');
+    } catch (e) {
+      throw new Error('startNotifications() nieudane: ' + e.message +
+        '\n\nMożliwe przyczyny:\n• Strona otwarta jako plik (file://). Użyj localhost lub HTTPS.\n• Przeglądarka nie obsługuje Web BLE (wymagany Chrome/Edge na desktopie).');
+    }
+
+    // ── 6. Odbiór danych ─────────────────────
+    char.addEventListener('characteristicvaluechanged', e => {
+      const raw   = new TextDecoder().decode(e.target.value).trim();
+      console.log('[BLE] Odebrano:', raw);
+
+      // Format z firmware: "prędkość,powtórzenie,czas_ms"
+      const parts = raw.split(',');
+      const vel   = parseFloat(parts[0]);
+      const rep   = parts[1] ? parseInt(parts[1]) : null;
+      const dur   = parts[2] ? parseInt(parts[2]) : null;
+
+      if (!isNaN(vel) && vel > 0) {
+        onNewRep(vel, rep, dur);
+      } else {
+        console.warn('[BLE] Nieoczekiwany format danych:', raw);
+      }
     });
 
-    alert("Połączono!");
-  } catch (error) {
-    alert("Błąd: " + error.message);
+    // ── 7. UI: połączono ─────────────────────
+    dot.className = 'dot on';
+    status.className = 'conn-status on';
+    setStatus((device.name || 'VBT_XIAO').toUpperCase());
+    btn.textContent = 'POŁĄCZONO';
+    // btn.disabled pozostaje true – już połączono
+
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'POŁĄCZ';
+    setStatus('BŁĄD');
+    console.error('[BLE] Błąd:', err);
+    if (err.name !== 'NotFoundError') {
+      alert('Błąd połączenia BLE:\n\n' + err.message);
+    }
   }
 }
 
