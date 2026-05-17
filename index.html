@@ -669,6 +669,18 @@ async function connectBLE() {
   const dot    = document.getElementById('dot');
   const status = document.getElementById('connStatus');
 
+  // ── Sprawdzenie wsparcia przeglądarki ────
+  if (!navigator.bluetooth) {
+    alert(
+      'Ten browser nie obsługuje Web Bluetooth.\n\n' +
+      '✓ Działa: Chrome / Edge na Windows, macOS, Android\n' +
+      '✗ Nie działa: Firefox, Safari, Chrome na iOS\n\n' +
+      'Jeśli używasz Chrome — upewnij się że strona\n' +
+      'jest otwarta przez localhost lub https://, nie file://'
+    );
+    return;
+  }
+
   try {
     btn.disabled = true;
     btn.textContent = 'SZUKAM...';
@@ -756,8 +768,10 @@ async function connectBLE() {
     btn.textContent = 'POŁĄCZ';
     setStatus('BŁĄD');
     console.error('[BLE] Błąd:', err);
-    if (err.name !== 'NotFoundError') {
-      alert('Błąd połączenia BLE:\n\n' + err.message);
+    // err.message może być undefined dla niektórych typów błędów
+    const msg = err?.message || err?.toString() || String(err) || 'Nieznany błąd';
+    if (err?.name !== 'NotFoundError') {
+      alert('Błąd połączenia BLE:\n\n' + msg);
     }
   }
 }
